@@ -1,0 +1,14 @@
+import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { PERMISSIONS, requirePermission } from "@/lib/auth/permissions";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { money, REGISTRATION_STATUS_LABELS } from "@/lib/registrations/utils";
+
+export default async function RegistrationsPage({ searchParams }: { searchParams: Promise<{ event?: string; status?: string; q?: string }> }) {
+  await requirePermission(PERMISSIONS.REGISTRATIONS_VIEW);
+  const sp=await searchParams; const q=sp.q?.trim();
+  const registrations=await prisma.eventRegistration.findMany({ where:{ ...(sp.event?{eventId:sp.event}:{}), ...(sp.status?{status:sp.status as any}:{}), ...(q?{OR:[{name:{contains:q}},{phone:{contains:q}},{email:{contains:q}}]}:{}) }, include:{event:true,_count:{select:{participants:true,benefitApprovals:true}}}, orderBy:{registeredAt:"desc"}, take:100 });
+  const events=await prisma.event.findMany({orderBy:{startsAt:"desc"},select:{id:true,name:true}});
+  return <div className="space-y-6"><div><h1 className="text-2xl font-bold tracking-tight">Inscrições</h1><p className="text-muted-foreground">Inscrições públicas, participantes, benefícios e pagamentos.</p></div><Card><CardContent className="pt-6"><form className="grid gap-3 md:grid-cols-4"><input name="q" defaultValue={sp.q} placeholder="Nome, telefone ou e-mail" className="h-10 rounded-md border px-3 text-sm"/><select name="event" defaultValue={sp.event??""} className="h-10 rounded-md border px-3 text-sm"><option value="">Todos os eventos</option>{events.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}</select><select name="status" defaultValue={sp.status??""} className="h-10 rounded-md border px-3 text-sm"><option value="">Todos os status</option>{Object.entries(REGISTRATION_STATUS_LABELS).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select><button className="h-10 rounded-md bg-primary px-4 text-sm text-primary-foreground">Filtrar</button></form></CardContent></Card><Card><CardHeader><CardTitle>Registros ({registrations.length})</CardTitle></CardHeader><CardContent><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="py-3">Responsável</th><th>Evento</th><th>Participantes</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>{registrations.map(r=><tr key={r.id} className="border-b"><td className="py-3"><div className="font-medium">{r.name}</div><div className="text-xs text-muted-foreground">{r.phone}</div></td><td>{r.event.name}</td><td>{r._count.participants}</td><td>{money(r.finalAmount)}</td><td><Badge>{REGISTRATION_STATUS_LABELS[r.status]}</Badge></td><td className="text-right"><Link className="font-medium underline" href={`/admin/inscricoes/${r.id}`}>Abrir</Link></td></tr>)}</tbody></table></div></CardContent></Card></div>;
+}

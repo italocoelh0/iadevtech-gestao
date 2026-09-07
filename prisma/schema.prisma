@@ -1,0 +1,761 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum BloodType {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  NOT_INFORMED
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DECEASED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum FeeStatus {
+  PENDING
+  PAID
+  CANCELED
+  EXEMPT
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+}
+
+enum PaymentMethodType {
+  CASH
+  PIX
+  DEBIT_CARD
+  CREDIT_CARD
+  BANK_TRANSFER
+  OTHER
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  REGISTRATIONS_OPEN
+  REGISTRATIONS_CLOSED
+  IN_PROGRESS
+  FINISHED
+  CANCELED
+}
+
+enum RegistrationStatus {
+  PENDING
+  AWAITING_PAYMENT
+  CONFIRMED
+  PAID
+  EXEMPT
+  CANCELED
+  WAITLIST
+}
+
+enum RegistrationBenefitType {
+  EXEMPTION
+  PERCENTAGE_DISCOUNT
+  FIXED_DISCOUNT
+  SPECIAL_PRICE
+}
+
+enum BenefitApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CheckinStatus {
+  CHECKED_IN
+  REVERSED
+}
+
+enum StockMovementType {
+  PURCHASE
+  DONATION
+  RETURN
+  ORDER_CONSUMPTION
+  LOSS
+  DAMAGE
+  INTERNAL_USE
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  EVENT_TRANSFER
+  EVENT_RETURN
+}
+
+enum CashRegisterStatus {
+  OPEN
+  CLOSED
+}
+
+enum CashTransactionType {
+  INCOME
+  EXPENSE
+  REVERSAL
+  ADJUSTMENT
+}
+
+enum OrderStatus {
+  OPEN
+  AWAITING_PAYMENT
+  PAYMENT_PROCESSING
+  PAID
+  CANCELED
+}
+
+enum OrderOrigin {
+  EVENT
+  MANUAL
+}
+
+enum OrderItemStatus {
+  ACTIVE
+  CANCELED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  CANCEL
+  RESTORE
+  LOGIN
+  LOGOUT
+  PAYMENT
+  REFUND
+  STOCK_ADJUSTMENT
+  CASH_OPEN
+  CASH_CLOSE
+  CHECKIN
+}
+
+enum ExemptionCriteriaType {
+  MANUAL
+  AGE_RANGE
+  MEMBER_STATUS
+  ROLE
+  CUSTOM
+}
+
+enum SettingValueType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+model User {
+  id           String     @id @default(cuid())
+  memberId     String?    @unique
+  name         String
+  email        String     @unique
+  passwordHash String
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  member       Member?       @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  roles        UserRole[]
+  auditLogs    AuditLog[]    @relation("AuditActor")
+  createdFees  MembershipFee[] @relation("FeeCreatedBy")
+  createdCash  CashTransaction[] @relation("CashCreatedBy")
+  openedCashRegisters CashRegister[] @relation("CashOpenedBy")
+  closedCashRegisters CashRegister[] @relation("CashClosedBy")
+  approvedBenefits EventBenefitApproval[] @relation("BenefitApprover")
+  stockMovements StockMovement[] @relation("StockMovementCreatedBy")
+  performedCheckins EventCheckin[] @relation("CheckinPerformedBy")
+  reversedCheckins EventCheckin[] @relation("CheckinReversedBy")
+
+  @@index([status])
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  roles       RolePermission[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model Member {
+  id              String       @id @default(cuid())
+  fullName        String
+  phone           String?
+  email           String?
+  bloodType       BloodType    @default(NOT_INFORMED)
+  birthDate       DateTime?
+  address         String?
+  city            String?
+  state           String?
+  joinedAt        DateTime?
+  status          MemberStatus @default(ACTIVE)
+  notes           String?
+  photoUrl        String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  user              User?
+  membershipFees    MembershipFee[]
+  responsibleFor    EventRegistration[] @relation("RegistrationResponsible")
+  participantLinks  EventParticipant[]
+
+  @@index([fullName])
+  @@index([phone])
+  @@index([email])
+  @@index([status])
+}
+
+model MembershipFee {
+  id              String    @id @default(cuid())
+  memberId        String
+  competencyYear  Int
+  competencyMonth Int
+  amount          Decimal   @db.Decimal(12, 2)
+  dueDate         DateTime?
+  paidAt          DateTime?
+  status          FeeStatus @default(PENDING)
+  paymentMethodId String?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  member        Member        @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  createdBy     User?         @relation("FeeCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  cashTransactions CashTransaction[]
+
+  @@unique([memberId, competencyYear, competencyMonth])
+  @@index([status])
+  @@index([competencyYear, competencyMonth])
+  @@index([competencyYear, competencyMonth, status])
+  @@index([status, dueDate])
+  @@index([paymentMethodId])
+}
+
+model Event {
+  id                    String      @id @default(cuid())
+  name                  String
+  slug                  String      @unique
+  description           String?     @db.Text
+  coverImageUrl         String?
+  startsAt              DateTime
+  endsAt                DateTime?
+  location              String?
+  address               String?
+  city                  String?
+  state                 String?
+  status                EventStatus @default(DRAFT)
+  isPublic              Boolean     @default(true)
+  registrationOpensAt   DateTime?
+  registrationClosesAt  DateTime?
+  capacity              Int?
+  defaultPrice          Decimal     @default(0) @db.Decimal(12, 2)
+  allowMembers          Boolean     @default(true)
+  allowNonMembers       Boolean     @default(true)
+  allowCompanions       Boolean     @default(true)
+  allowGroupRegistration Boolean    @default(true)
+  notes                 String?     @db.Text
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  registrationTypes EventRegistrationType[]
+  exemptionRules    EventExemptionRule[]
+  registrations     EventRegistration[]
+  orders            Order[]
+  stockMovements    StockMovement[]
+  cashTransactions  CashTransaction[]
+  checkins          EventCheckin[]
+  benefitApprovals  EventBenefitApproval[]
+
+  @@index([status])
+  @@index([startsAt])
+  @@index([status, startsAt])
+  @@index([isPublic, status])
+}
+
+model EventRegistrationType {
+  id          String  @id @default(cuid())
+  eventId     String
+  name        String
+  description String?
+  price       Decimal @db.Decimal(12, 2)
+  minAge      Int?
+  maxAge      Int?
+  active      Boolean @default(true)
+  sortOrder   Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event        Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participants EventParticipant[]
+
+  @@index([eventId, active])
+}
+
+model EventExemptionRule {
+  id          String                  @id @default(cuid())
+  eventId     String
+  name        String
+  description String?
+  criteria    ExemptionCriteriaType
+  minAge      Int?
+  maxAge      Int?
+  memberOnly  Boolean                 @default(false)
+  roleName    String?
+  benefitType RegistrationBenefitType @default(EXEMPTION)
+  benefitValue Decimal?              @db.Decimal(12, 2)
+  active      Boolean                 @default(true)
+  sortOrder   Int                     @default(0)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  event       Event                    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  approvals   EventBenefitApproval[]
+
+  @@index([eventId, active])
+}
+
+model EventRegistration {
+  id                   String             @id @default(cuid())
+  eventId              String
+  responsibleMemberId  String?
+  publicToken          String             @unique @default(cuid())
+  name                 String
+  phone                String?
+  email                String?
+  status               RegistrationStatus @default(PENDING)
+  participantCount     Int                @default(1)
+  subtotal             Decimal            @db.Decimal(12, 2)
+  discountAmount       Decimal            @default(0) @db.Decimal(12, 2)
+  finalAmount          Decimal            @db.Decimal(12, 2)
+  notes                String?            @db.Text
+  registeredAt         DateTime           @default(now())
+  confirmedAt          DateTime?
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  event              Event               @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  responsibleMember  Member?             @relation("RegistrationResponsible", fields: [responsibleMemberId], references: [id], onDelete: SetNull)
+  participants       EventParticipant[]
+  payments           EventPayment[]
+  benefitApprovals   EventBenefitApproval[]
+  cashTransactions   CashTransaction[]
+
+  @@index([eventId, status])
+  @@index([responsibleMemberId])
+  @@index([phone])
+  @@index([email])
+}
+
+model EventParticipant {
+  id                   String  @id @default(cuid())
+  registrationId       String
+  memberId             String?
+  registrationTypeId   String?
+  name                 String
+  phone                String?
+  email                String?
+  birthDate            DateTime?
+  amount               Decimal @db.Decimal(12, 2)
+  discountAmount       Decimal @default(0) @db.Decimal(12, 2)
+  finalAmount          Decimal @db.Decimal(12, 2)
+  publicToken          String  @unique @default(cuid())
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  registration       EventRegistration     @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  member             Member?               @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  registrationType   EventRegistrationType? @relation(fields: [registrationTypeId], references: [id], onDelete: SetNull)
+  checkins           EventCheckin[]
+  stockMovements     StockMovement[]
+  benefitApprovals   EventBenefitApproval[]
+
+  @@index([registrationId])
+  @@index([memberId])
+}
+
+model EventBenefitApproval {
+  id              String                 @id @default(cuid())
+  eventId         String
+  registrationId  String
+  ruleId          String?
+  participantId   String?
+  requestedByName String?
+  reason          String?
+  benefitType     RegistrationBenefitType?
+  benefitValue    Decimal?               @db.Decimal(12, 2)
+  status          BenefitApprovalStatus  @default(PENDING)
+  approvedById    String?
+  decidedAt       DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  event        Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  registration EventRegistration  @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  rule         EventExemptionRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  participant  EventParticipant?   @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  approvedBy   User?              @relation("BenefitApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId, status])
+  @@index([registrationId])
+  @@index([participantId])
+}
+
+model EventPayment {
+  id              String        @id @default(cuid())
+  registrationId  String
+  paymentMethodId String
+  amount          Decimal       @db.Decimal(12, 2)
+  status          PaymentStatus @default(PENDING)
+  externalId      String?
+  qrCodePayload   String?       @db.Text
+  paidAt          DateTime?
+  expiresAt       DateTime?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  registration EventRegistration @relation(fields: [registrationId], references: [id], onDelete: Restrict)
+  paymentMethod PaymentMethod    @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+
+  @@index([registrationId, status])
+  @@index([externalId])
+}
+
+model EventCheckin {
+  id             String         @id @default(cuid())
+  eventId        String
+  participantId  String
+  status         CheckinStatus  @default(CHECKED_IN)
+  activeKey      String?        @unique
+  checkedInAt    DateTime       @default(now())
+  checkedInById  String?
+  reversedAt     DateTime?
+  reversedById   String?
+  notes          String?
+
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  participant   EventParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  checkedInBy   User?            @relation("CheckinPerformedBy", fields: [checkedInById], references: [id], onDelete: SetNull)
+  reversedBy    User?            @relation("CheckinReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+
+  @@index([eventId, checkedInAt])
+  @@index([participantId, status])
+  @@index([checkedInById])
+  @@index([reversedById])
+}
+
+model ProductCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id               String    @id @default(cuid())
+  categoryId       String?
+  name             String
+  sku              String?   @unique
+  unit              String    @default("UN")
+  salePrice        Decimal   @db.Decimal(12, 2)
+  costPrice        Decimal?  @db.Decimal(12, 2)
+  minimumStock     Decimal   @default(0) @db.Decimal(12, 3)
+  active           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  category         ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  stockMovements   StockMovement[]
+  orderItems       OrderItem[]
+
+  @@index([name])
+  @@index([categoryId])
+  @@index([active])
+}
+
+model StockMovement {
+  id              String             @id @default(cuid())
+  productId       String
+  eventId         String?
+  participantId   String?
+  orderItemId     String?
+  createdById     String?
+  type            StockMovementType
+  quantity        Decimal            @db.Decimal(12, 3)
+  unitCost        Decimal?           @db.Decimal(12, 2)
+  referenceType   String?
+  referenceId     String?
+  reversalOfId    String?
+  notes           String?
+  createdAt       DateTime           @default(now())
+
+  product      Product           @relation(fields: [productId], references: [id], onDelete: Restrict)
+  event        Event?            @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  participant  EventParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+  orderItem    OrderItem?        @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+  createdBy    User?             @relation("StockMovementCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reversalOf   StockMovement?    @relation("StockMovementReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals    StockMovement[]   @relation("StockMovementReversal")
+
+  @@index([productId, createdAt])
+  @@index([productId, type])
+  @@index([eventId, createdAt])
+  @@index([orderItemId])
+  @@index([createdById, createdAt])
+  @@index([type])
+  @@index([referenceType, referenceId])
+  @@index([reversalOfId])
+}
+
+model PaymentMethod {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  type        PaymentMethodType
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  membershipFees  MembershipFee[]
+  eventPayments   EventPayment[]
+  cashTransactions CashTransaction[]
+  orders          Order[]
+}
+
+model CashRegister {
+  id          String             @id @default(cuid())
+  openedById  String
+  closedById  String?
+  openedAt    DateTime
+  closedAt    DateTime?
+  openingBalance Decimal         @db.Decimal(12, 2)
+  expectedBalance Decimal?
+  closingBalance  Decimal?
+  difference     Decimal?
+  status       CashRegisterStatus @default(OPEN)
+  notes        String?            @db.Text
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  openedBy     User              @relation("CashOpenedBy", fields: [openedById], references: [id], onDelete: Restrict)
+  closedBy     User?             @relation("CashClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  transactions CashTransaction[]
+
+  @@index([status, openedAt])
+  @@index([openedById])
+  @@index([closedById])
+}
+
+model CashCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  type        CashTransactionType
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  transactions CashTransaction[]
+}
+
+model CashTransaction {
+  id                String              @id @default(cuid())
+  sourceKey         String?             @unique
+  cashRegisterId    String?
+  categoryId        String
+  paymentMethodId   String?
+  eventId           String?
+  registrationId    String?
+  membershipFeeId   String?
+  orderId           String?
+  createdById       String?
+  type              CashTransactionType
+  amount            Decimal             @db.Decimal(12, 2)
+  description       String
+  occurredAt        DateTime            @default(now())
+  reversedAt        DateTime?
+  reversalOfId      String?
+  attachmentUrl     String?
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  cashRegister  CashRegister?     @relation(fields: [cashRegisterId], references: [id], onDelete: SetNull)
+  category      CashCategory      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  paymentMethod PaymentMethod?    @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  event         Event?            @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  registration  EventRegistration? @relation(fields: [registrationId], references: [id], onDelete: SetNull)
+  membershipFee MembershipFee?    @relation(fields: [membershipFeeId], references: [id], onDelete: SetNull)
+  order         Order?            @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy     User?             @relation("CashCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  reversalOf    CashTransaction?  @relation("CashReversal", fields: [reversalOfId], references: [id], onDelete: SetNull)
+  reversals     CashTransaction[]  @relation("CashReversal")
+
+  @@index([cashRegisterId, occurredAt])
+  @@index([occurredAt, type])
+  @@index([categoryId, occurredAt])
+  @@index([eventId])
+  @@index([registrationId])
+  @@index([membershipFeeId])
+  @@index([orderId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  eventId         String?
+  publicToken     String      @unique
+  customerName    String
+  customerPhone   String?
+  status          OrderStatus @default(OPEN)
+  origin          OrderOrigin @default(EVENT)
+  subtotal        Decimal     @db.Decimal(12, 2)
+  discountAmount  Decimal     @default(0) @db.Decimal(12, 2)
+  totalAmount     Decimal     @db.Decimal(12, 2)
+  paymentMethodId String?
+  openedAt        DateTime    @default(now())
+  closedAt        DateTime?
+  paidAt          DateTime?
+  canceledAt      DateTime?
+  notes           String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  event         Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  items         OrderItem[]
+  paymentMethod PaymentMethod?  @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  cashTransactions CashTransaction[]
+
+  @@index([eventId, status])
+  @@index([status, openedAt])
+  @@index([customerPhone])
+  @@index([customerPhone, status, openedAt])
+}
+
+model OrderItem {
+  id          String          @id @default(cuid())
+  orderId     String
+  productId   String
+  productName String
+  status      OrderItemStatus @default(ACTIVE)
+  quantity    Decimal         @db.Decimal(12, 3)
+  unitPrice   Decimal         @db.Decimal(12, 2)
+  totalPrice  Decimal         @db.Decimal(12, 2)
+  canceledAt  DateTime?
+  createdAt   DateTime        @default(now())
+
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  stockMovements StockMovement[]
+
+  @@index([orderId, status])
+  @@index([productId])
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  actorUserId String?
+  action      AuditAction
+  entityType  String
+  entityId    String?
+  description String?
+  oldData     Json?
+  newData     Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime    @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
+  @@index([action, createdAt])
+}
+
+model SystemSetting {
+  id          String            @id @default(cuid())
+  key         String            @unique
+  value       String            @db.Text
+  valueType   SettingValueType  @default(STRING)
+  description String?
+  isSecret    Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+
+model RateLimitBucket {
+  key       String   @id @db.VarChar(191)
+  count     Int      @default(1)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
