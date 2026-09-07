@@ -17,8 +17,8 @@ export async function checkInParticipant(participantId: string) {
     include: { registration: { include: { event: true } } },
   });
   if (!participant) throw new Error("PARTICIPANT_NOT_FOUND");
-  if ([RegistrationStatus.CANCELED, RegistrationStatus.WAITLIST].includes(participant.registration.status)) throw new Error("REGISTRATION_NOT_ELIGIBLE");
-  if (!["IN_PROGRESS", "REGISTRATIONS_CLOSED", "REGISTRATIONS_OPEN"].includes(participant.registration.event.status)) throw new Error("EVENT_NOT_OPEN_FOR_CHECKIN");
+  if (participant.registration.status === RegistrationStatus.CANCELED || participant.registration.status === RegistrationStatus.WAITLIST) throw new Error("REGISTRATION_NOT_ELIGIBLE");
+  if (participant.registration.event.status !== "IN_PROGRESS" && participant.registration.event.status !== "REGISTRATIONS_CLOSED" && participant.registration.event.status !== "REGISTRATIONS_OPEN") throw new Error("EVENT_NOT_OPEN_FOR_CHECKIN");
 
   const key = activeKey(participant.registration.eventId, participant.id);
   const existing = await prisma.eventCheckin.findUnique({ where: { activeKey: key } });

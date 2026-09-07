@@ -48,7 +48,7 @@ export async function createStockMovement(_:StockActionState,formData:FormData):
     if(d.quantity>balance)return {error:`Estoque insuficiente. Saldo atual: ${balance.toLocaleString("pt-BR",{maximumFractionDigits:3})} ${product.unit}.`};
   }
   const movement=await prisma.stockMovement.create({data:{productId:d.productId,eventId:d.eventId||null,type:d.type as StockMovementType,quantity:d.quantity,unitCost:d.unitCost??null,notes:d.notes||null,createdById:session.user.id,referenceType:"MANUAL"}});
-  await writeAuditLog({actorUserId:session.user.id,action:["ADJUSTMENT_IN","ADJUSTMENT_OUT"].includes(movement.type)?AuditAction.STOCK_ADJUSTMENT:AuditAction.CREATE,entityType:"StockMovement",entityId:movement.id,description:`Movimentação de estoque registrada para ${product.name}.`,newData:movement});
+  await writeAuditLog({actorUserId:session.user.id,action:(movement.type==="ADJUSTMENT_IN"||movement.type==="ADJUSTMENT_OUT")?AuditAction.STOCK_ADJUSTMENT:AuditAction.CREATE,entityType:"StockMovement",entityId:movement.id,description:`Movimentação de estoque registrada para ${product.name}.`,newData:movement});
   revalidatePath("/admin/estoque"); revalidatePath(`/admin/estoque/produtos/${product.id}`); return {success:"Movimentação registrada."};
 }
 

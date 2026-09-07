@@ -1,6 +1,7 @@
 import { CashTransactionType, EventStatus, FeeStatus, OrderStatus, RegistrationStatus, StockMovementType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseDateRange, startOfMonth, endOfMonth } from "@/lib/reports/utils";
+import { movementFactor } from "@/lib/stock/utils";
 
 function originalType(metadata: unknown) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return undefined;
@@ -56,7 +57,7 @@ export async function getDashboardData() {
 
   const balances = new Map<string, number>();
   for (const m of movements) {
-    const factor = ["PURCHASE","DONATION","RETURN","ADJUSTMENT_IN","EVENT_RETURN"].includes(m.type) ? 1 : -1;
+    const factor = movementFactor(m.type);
     balances.set(m.productId, (balances.get(m.productId) ?? 0) + factor * Number(m._sum.quantity ?? 0));
   }
   const lowStock = products
@@ -119,7 +120,7 @@ export async function getStockReport() {
   ]);
   const balanceMap = new Map<string, number>();
   for (const b of balances) {
-    const factor = ["PURCHASE","DONATION","RETURN","ADJUSTMENT_IN","EVENT_RETURN"].includes(b.type) ? 1 : -1;
+    const factor = movementFactor(b.type);
     balanceMap.set(b.productId, (balanceMap.get(b.productId) ?? 0) + factor * Number(b._sum.quantity ?? 0));
   }
   const consumedMap = new Map(consumption.map((b) => [b.productId, Math.abs(Number(b._sum.quantity ?? 0))]));

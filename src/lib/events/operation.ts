@@ -55,7 +55,7 @@ export async function getEventOperation(eventId: string) {
   );
   const present = participants.filter((participant) => participant.checkins.length > 0).length;
   const unpaidRegistrations = registrations.filter((registration) =>
-    [RegistrationStatus.PENDING, RegistrationStatus.AWAITING_PAYMENT].includes(registration.status),
+    registration.status === RegistrationStatus.PENDING || registration.status === RegistrationStatus.AWAITING_PAYMENT,
   );
 
   const blockers = [

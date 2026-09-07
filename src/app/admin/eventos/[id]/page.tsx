@@ -48,11 +48,11 @@ export default async function EventDetailPage({ params, searchParams }: { params
     <Card><CardHeader><CardTitle>Controle do evento</CardTitle><CardDescription>Alterações de status são auditadas.</CardDescription></CardHeader><CardContent className="flex flex-wrap gap-2">
       {hasPermission(session.user.roles,PERMISSIONS.EVENTS_PUBLISH)&&<>
         {event.status==="DRAFT"&&<form action={publishEvent.bind(null,event.id)}><Button type="submit">Publicar</Button></form>}
-        {["PUBLISHED","REGISTRATIONS_CLOSED"].includes(event.status)&&<form action={openRegistrations.bind(null,event.id)}><Button type="submit">Abrir inscrições</Button></form>}
+        {(event.status==="PUBLISHED"||event.status==="REGISTRATIONS_CLOSED")&&<form action={openRegistrations.bind(null,event.id)}><Button type="submit">Abrir inscrições</Button></form>}
         {event.status==="REGISTRATIONS_OPEN"&&<form action={closeRegistrations.bind(null,event.id)}><Button type="submit" variant="outline">Encerrar inscrições</Button></form>}
-        {["PUBLISHED","REGISTRATIONS_OPEN","REGISTRATIONS_CLOSED"].includes(event.status)&&<form action={startEvent.bind(null,event.id)}><Button type="submit" variant="secondary">Iniciar evento</Button></form>}
+        {(event.status==="PUBLISHED"||event.status==="REGISTRATIONS_OPEN"||event.status==="REGISTRATIONS_CLOSED")&&<form action={startEvent.bind(null,event.id)}><Button type="submit" variant="secondary">Iniciar evento</Button></form>}
       </>}
-      {hasPermission(session.user.roles,PERMISSIONS.EVENTS_CANCEL)&&!["FINISHED","CANCELED"].includes(event.status)&&<form action={cancelEvent.bind(null,event.id)}><Button type="submit" variant="outline">Cancelar evento</Button></form>}
+      {hasPermission(session.user.roles,PERMISSIONS.EVENTS_CANCEL)&&event.status!=="FINISHED"&&event.status!=="CANCELED"&&<form action={cancelEvent.bind(null,event.id)}><Button type="submit" variant="outline">Cancelar evento</Button></form>}
     </CardContent></Card>
 
     <div className="grid gap-6 lg:grid-cols-2">

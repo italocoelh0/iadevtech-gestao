@@ -69,6 +69,6 @@ export async function toPdf<T extends Record<string, unknown>>(title: string, ro
 
 export function exportResponse(buffer: Buffer | string, format: string, filename: string) {
   const types: Record<string,string> = { csv: "text/csv; charset=utf-8", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", pdf: "application/pdf" };
-  const body = typeof buffer === "string" ? `\uFEFF${buffer}` : buffer;
+  const body = typeof buffer === "string" ? `\uFEFF${buffer}` : new Uint8Array(buffer);
   return new Response(body, { headers: { "Content-Type": types[format] ?? "application/octet-stream", "Content-Disposition": `attachment; filename=\"${filename}.${format}\"`, "Cache-Control": "no-store" } });
 }
